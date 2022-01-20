@@ -467,9 +467,10 @@ multilib_src_install_all() {
 	# # Symlink /etc/sysctl.conf for easy migration.
 	# dosym ../../../etc/sysctl.conf /usr/lib/sysctl.d/99-sysctl.conf
 
-	if use pam; then
-		newpamd "${FILESDIR}"/systemd-user.pam systemd-user
-	fi
+	# Flatcar: Do not install a pam policy, we have our own.
+	# if use pam; then
+	# 	newpamd "${FILESDIR}"/systemd-user.pam systemd-user
+	# fi
 
 	if use split-usr; then
 		# Avoid breaking boot/reboot
@@ -519,38 +520,46 @@ multilib_src_install_all() {
 	# Flatcar: These lines more or less follow the systemd's
 	# preset file (90-systemd.preset). We do it that way, to avoid
 	# putting symlinks in /etc. Please keep the lines in the same
-	# order as the "enable" lines appear in the preset file.
-	builddir_systemd_enable_service multi-user.target remote-fs.target
-	builddir_systemd_enable_service multi-user.target remote-cryptsetup.target
-	builddir_systemd_enable_service multi-user.target machines.target
-	# Flatcar: getty@.service is enabled manually below.
-	builddir_systemd_enable_service sysinit.target systemd-timesyncd.service
-	builddir_systemd_enable_service multi-user.target systemd-networkd.service
-	# Flatcar: For systemd-networkd.service, it has it in Also, which also
-	# needs to be enabled
-	builddir_systemd_enable_service sockets.target systemd-networkd.socket
-	# Flatcar: For systemd-networkd.service, it has it in Also, which also
-	# needs to be enabled
-	builddir_systemd_enable_service network-online.target systemd-networkd-wait-online.service
-	builddir_systemd_enable_service sysinit.target systemd-networkd-generator.service
-	builddir_systemd_enable_service multi-user.target systemd-resolved.service
-	if use homed; then
-		builddir_systemd_enable_service multi-user.target systemd-homed.target
-		# Flatcar: systemd-homed.target has
-		# Also=systemd-userdbd.service, but the service has no
-		# WantedBy entry. It's likely going to be executed through
-		# systemd-userdbd.socket, which is enabled in upstream's
-		# presets file.
-		builddir_systemd_enable_service sockets.target systemd-userdbd.socket
-	fi
-	builddir_systemd_enable_service sysinit.target systemd-pstore.service
-	builddir_systemd_enable_service sysinit.target systemd-boot-update.service
-	# Flatcar: not enabling reboot.target - it has no WantedBy
-	# entry.
+	# order as the "enable" lines appear in the preset file. For a
+	# single enable line in preset, there may be more lines if the
+	# unit file had Also: clause which has units we enable here
+	# too.
 
-	# Flatcar: Enable getty manually.
+	# Flatcar: enable remote-fs.target
+	builddir_systemd_enable_service multi-user.target remote-fs.target
+	# Flatcar: enable remote-cryptsetup.target
+        if use cryptsetup; then
+	    builddir_systemd_enable_service multi-user.target remote-cryptsetup.target
+        fi
+	# Flatcar: enable machines.target
+	builddir_systemd_enable_service multi-user.target machines.target
+	# Flatcar: enable getty@.service
 	dodir "${unitdir}/getty.target.wants"
 	dosym ../getty@.service "${unitdir}/getty.target.wants/getty@tty1.service"
+	# Flatcar: enable systemd-timesyncd.service
+	builddir_systemd_enable_service sysinit.target systemd-timesyncd.service
+	# Flatcar: enable systemd-networkd.service (Also: systemd-networkd.socket, systemd-networkd-wait-online.service)
+	builddir_systemd_enable_service multi-user.target systemd-networkd.service
+	builddir_systemd_enable_service sockets.target systemd-networkd.socket
+	builddir_systemd_enable_service network-online.target systemd-networkd-wait-online.service
+	# Flatcar: enable systemd-network-generator.service
+	builddir_systemd_enable_service sysinit.target systemd-network-generator.service
+	# Flatcar: enable systemd-resolved.service
+	builddir_systemd_enable_service multi-user.target systemd-resolved.service
+	# Flatcar: enable systemd-homed.service (Also: systemd-userdbd.service [not enabled - has no WantedBy entry])
+	if use homed; then
+		builddir_systemd_enable_service multi-user.target systemd-homed.target
+	fi
+	# Flatcar: enable systemd-userdbd.socket
+	builddir_systemd_enable_service sockets.target systemd-userdbd.socket
+	# Flatcar: enable systemd-pstore.service
+	builddir_systemd_enable_service sysinit.target systemd-pstore.service
+	# Flatcar: enable systemd-boot-update.service
+	if use gnuefi; then
+		builddir_systemd_enable_service sysinit.target systemd-boot-update.service
+	fi
+	# Flatcar: enable reboot.target (not enabled - has no WantedBy
+	# entry)
 
 	# Flatcar: Use an empty preset file, because systemctl
 	# preset-all puts symlinks in /etc, not in /usr. We don't use
